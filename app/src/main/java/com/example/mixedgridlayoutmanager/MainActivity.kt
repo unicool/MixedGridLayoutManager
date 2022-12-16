@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
             2,
             RecyclerView.VERTICAL
         ).apply {
-
+//            this.setLazySpanLookup{it}
         }
         list.adapter = object : RecyclerView.Adapter<ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -78,7 +78,26 @@ class MainActivity : AppCompatActivity() {
 
             override fun getItemViewType(position: Int): Int {
                 return when (position) {
-                    in 0..20 -> {
+                    0 -> {
+                        viewTypeOfStaggered
+                    }
+                    1 -> {
+                        viewTypeOfFullSpan
+                    }
+                    2, 3 -> {
+                        viewTypeOfStaggered
+                    }
+                    4 -> {
+                        viewTypeOfFullSpan
+                    }
+                    5, 6, 7 -> {
+                        viewTypeOfStaggered
+                    }
+                    8 -> {
+                        viewTypeOfFullSpan
+                    }
+
+                    in 9..20 -> {
                         viewTypeOfStaggered
                     }
                     21 -> {

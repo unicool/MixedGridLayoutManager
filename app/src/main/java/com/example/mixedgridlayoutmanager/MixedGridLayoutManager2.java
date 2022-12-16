@@ -186,6 +186,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      * <p>
      * After scrolling stops, we check this flag and if it is set, re-layout.
      */
+    // TODO: 2022/12/13 fullSpan 或者 alignSpan 可公用该标准位, 警惕是否会反复layout
     private boolean mLaidOutInvalidFullSpan = false;
 
     /**
@@ -348,7 +349,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 }
                 mSpansToCheck.clear(lp.mSpan.mIndex);
             }
-            if (lp.mFullSpan) {
+            if (lp.mFullSpan) {// TODO: 2022/12/16 alignSpan quick reject too
                 continue; // quick reject
             }
 
@@ -730,7 +731,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 continue;
             }
             LayoutParams layoutParams = (LayoutParams) child.getLayoutParams();
-            if (layoutParams.isFullSpan()) {
+            if (layoutParams.isFullSpan()) { // TODO: 2022/12/16 逻辑补充?
                 size = 1f * size / mSpanCount;
             }
             maxSize = Math.max(maxSize, size);
@@ -1112,7 +1113,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
     private void measureChildWithDecorationsAndMargin(View child, LayoutParams lp,
                                                       boolean alreadyMeasured) {
-        if (lp.mFullSpan) {
+        if (lp.mFullSpan) { // TODO: 2022/12/16 measure
             if (mOrientation == VERTICAL) {
                 measureChildWithDecorationsAndMargin(child, mFullSizeSpec,
                         getChildMeasureSpec(
@@ -1321,12 +1322,12 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         LayoutParams sglp = (LayoutParams) lp;
         if (mOrientation == HORIZONTAL) {
             info.setCollectionItemInfo(AccessibilityNodeInfoCompat.CollectionItemInfoCompat.obtain(
-                    sglp.getSpanIndex(), sglp.mFullSpan ? mSpanCount : 1,
+                    sglp.getSpanIndex(), sglp.mFullSpan ? mSpanCount : 1, // TODO: 2022/12/16 直接替换
                     -1, -1, false, false));
         } else { // VERTICAL
             info.setCollectionItemInfo(AccessibilityNodeInfoCompat.CollectionItemInfoCompat.obtain(
                     -1, -1,
-                    sglp.getSpanIndex(), sglp.mFullSpan ? mSpanCount : 1, false, false));
+                    sglp.getSpanIndex(), sglp.mFullSpan ? mSpanCount : 1, false, false)); // TODO: 2022/12/16 直接替换
         }
     }
 
@@ -1587,7 +1588,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 mLazySpanLookup.offsetForRemoval(positionStart, itemCountOrToPosition);
                 break;
             case AdapterHelper.UpdateOp.MOVE:
-                // TODO optimize
+                // sdk todo optimize
                 mLazySpanLookup.offsetForRemoval(positionStart, 1);
                 mLazySpanLookup.offsetForAddition(itemCountOrToPosition, 1);
                 break;
@@ -1641,7 +1642,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             LayoutParams lp = ((LayoutParams) view.getLayoutParams());
             final int position = lp.getViewLayoutPosition();
             final int spanIndex = mLazySpanLookup.getSpan(position);
-            Span currentSpan;
+            Span currentSpan; // TODO: 2022/12/14 参考 full, 是要起新行或者同行(考虑跨度)
             final boolean assignSpan = spanIndex == LayoutParams.INVALID_SPAN_ID;
             if (assignSpan) {
                 currentSpan = lp.mFullSpan ? mSpans[0] : getNextSpan(layoutState);
@@ -1662,15 +1663,15 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             } else {
                 addView(view, 0);
             }
-            measureChildWithDecorationsAndMargin(view, lp, false);
+            measureChildWithDecorationsAndMargin(view, lp, false); // TODO: 2022/12/14 根据`lp`进行不同的测量
 
-            final int start;
-            final int end;
+            final int start; // TODO: 2022/12/14 start 自行计量, 考虑新行同行
+            final int end; // TODO: 2022/12/14 end 自行计量, 考虑新行同行
             if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
                 start = lp.mFullSpan ? getMaxEnd(defaultNewViewLine)
                         : currentSpan.getEndLine(defaultNewViewLine);
                 end = start + mPrimaryOrientation.getDecoratedMeasurement(view);
-                if (assignSpan && lp.mFullSpan) {
+                if (assignSpan && lp.mFullSpan) { // TODO: 2022/12/14 mGapPerSpan
                     LazySpanLookup.FullSpanItem fullSpanItem;
                     fullSpanItem = createFullSpanItemFromEnd(start);
                     fullSpanItem.mGapDir = LayoutState.LAYOUT_START;
@@ -1681,7 +1682,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 end = lp.mFullSpan ? getMinStart(defaultNewViewLine)
                         : currentSpan.getStartLine(defaultNewViewLine);
                 start = end - mPrimaryOrientation.getDecoratedMeasurement(view);
-                if (assignSpan && lp.mFullSpan) {
+                if (assignSpan && lp.mFullSpan) { // TODO: 2022/12/14 mGapPerSpan
                     LazySpanLookup.FullSpanItem fullSpanItem;
                     fullSpanItem = createFullSpanItemFromStart(end);
                     fullSpanItem.mGapDir = LayoutState.LAYOUT_END;
@@ -1691,7 +1692,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             }
 
             // check if this item may create gaps in the future
-            if (lp.mFullSpan && layoutState.mItemDirection == LayoutState.ITEM_DIRECTION_HEAD) {
+            if (lp.mFullSpan && layoutState.mItemDirection == LayoutState.ITEM_DIRECTION_HEAD) { // TODO: 2022/12/13 `align`容易产生间隙: align & currentSpan.mIndex=0
                 if (assignSpan) {
                     mLaidOutInvalidFullSpan = true;
                 } else {
@@ -1711,9 +1712,9 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     }
                 }
             }
-            attachViewToSpans(view, lp, layoutState);
-            final int otherStart;
-            final int otherEnd;
+            attachViewToSpans(view, lp, layoutState); // TODO: 2022/12/14 更新到 Span(spanSize)
+            final int otherStart; // TODO: 2022/12/14 otherStart 自行计量, 考虑新行同行
+            final int otherEnd; // TODO: 2022/12/14 otherEnd 自行计量, 考虑新行同行
             if (isLayoutRTL() && mOrientation == VERTICAL) {
                 otherEnd = lp.mFullSpan ? mSecondaryOrientation.getEndAfterPadding() :
                         mSecondaryOrientation.getEndAfterPadding()
@@ -1733,9 +1734,9 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             }
 
             if (lp.mFullSpan) {
-                updateAllRemainingSpans(mLayoutState.mLayoutDirection, targetLine);
+                updateAllRemainingSpans(mLayoutState.mLayoutDirection, targetLine); // 这里似乎不用处理
             } else {
-                updateRemainingSpans(currentSpan, mLayoutState.mLayoutDirection, targetLine);
+                updateRemainingSpans(currentSpan, mLayoutState.mLayoutDirection, targetLine); // 这里似乎不用处理
             }
             recycle(recycler, mLayoutState);
             if (mLayoutState.mStopInFocusable && view.hasFocusable()) {
@@ -1781,13 +1782,13 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
     private void attachViewToSpans(View view, LayoutParams lp, LayoutState layoutState) {
         if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
-            if (lp.mFullSpan) {
+            if (lp.mFullSpan) { // TODO: 2022/12/16 细分
                 appendViewToAllSpans(view);
             } else {
                 lp.mSpan.appendToSpan(view);
             }
         } else {
-            if (lp.mFullSpan) {
+            if (lp.mFullSpan) { // TODO: 2022/12/16 细分
                 prependViewToAllSpans(view);
             } else {
                 lp.mSpan.prependToSpan(view);
@@ -1941,7 +1942,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             View child = getChildAt(0);
             if (mPrimaryOrientation.getDecoratedEnd(child) <= line
                     && mPrimaryOrientation.getTransformedEndWithDecoration(child) <= line) {
-                LayoutParams lp = (LayoutParams) child.getLayoutParams();
+                LayoutParams lp = (LayoutParams) child.getLayoutParams(); // TODO: 2022/12/14 `pop`几个
                 // Don't recycle the last View in a span not to lose span's start/end lines
                 if (lp.mFullSpan) {
                     for (int j = 0; j < mSpanCount; j++) {
@@ -1972,7 +1973,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             View child = getChildAt(i);
             if (mPrimaryOrientation.getDecoratedStart(child) >= line
                     && mPrimaryOrientation.getTransformedStartWithDecoration(child) >= line) {
-                LayoutParams lp = (LayoutParams) child.getLayoutParams();
+                LayoutParams lp = (LayoutParams) child.getLayoutParams(); // TODO: 2022/12/14 `pop`几个
                 // Don't recycle the last View in a span not to lose span's start/end lines
                 if (lp.mFullSpan) {
                     for (int j = 0; j < mSpanCount; j++) {
@@ -2028,7 +2029,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             for (int i = startIndex; i != endIndex; i += diff) {
                 final Span other = mSpans[i];
                 int otherLine = other.getEndLine(defaultLine);
-                if (otherLine < minLine) {
+                if (otherLine < minLine) { // TODO: 2022/12/13 `alignSpan`使用`max`, 而后将产生间隙 需要记录
                     min = other;
                     minLine = otherLine;
                 }
@@ -2041,7 +2042,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             for (int i = startIndex; i != endIndex; i += diff) {
                 final Span other = mSpans[i];
                 int otherLine = other.getStartLine(defaultLine);
-                if (otherLine > maxLine) {
+                if (otherLine > maxLine) { // TODO: 2022/12/13 `alignSpan`使用`min`, 而后将产生间隙 需要记录
                     max = other;
                     maxLine = otherLine;
                 }
@@ -2083,10 +2084,10 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     @Override
     public PointF computeScrollVectorForPosition(int targetPosition) {
         final int direction = calculateScrollDirectionForPosition(targetPosition);
-        PointF outVector = new PointF();
         if (direction == 0) {
             return null;
         }
+        PointF outVector = new PointF();
         if (mOrientation == HORIZONTAL) {
             outVector.x = direction;
             outVector.y = 0;
@@ -2329,7 +2330,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             return null;
         }
         LayoutParams prevFocusLayoutParams = (LayoutParams) directChild.getLayoutParams();
-        boolean prevFocusFullSpan = prevFocusLayoutParams.mFullSpan;
+        boolean prevFocusFullSpan = prevFocusLayoutParams.mFullSpan;// TODO: 2022/12/16 焦点.???
         final Span prevFocusSpan = prevFocusLayoutParams.mSpan;
         final int referenceChildPosition;
         if (layoutDir == LayoutState.LAYOUT_END) { // layout towards end
@@ -2476,8 +2477,19 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
         // Package scope to be able to access from tests.
         Span mSpan;
+        Span[] mInnerSpans; // TODO: 2022/12/16 need?
 
-        boolean mFullSpan;
+        @Deprecated
+        boolean mFullSpan = false;
+
+        /**
+         *  NOTE 水平对齐半跨度
+         *  `0`表示原始瀑布流
+         *  `spanSize`<`spanCount` 水平窗格
+         *  全跨度, `spanSize`=`spanCount`
+         */
+        int mSpanSize = 0;
+        int mSpanCount = INVALID_SPAN_ID;
 
         public LayoutParams(Context c, AttributeSet attrs) {
             super(c, attrs);
@@ -2507,6 +2519,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
          * @param fullSpan True if this item should traverse all spans.
          * @see #isFullSpan()
          */
+        @Deprecated
         public void setFullSpan(boolean fullSpan) {
             mFullSpan = fullSpan;
         }
@@ -2518,7 +2531,38 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
          * @see #setFullSpan(boolean)
          */
         public boolean isFullSpan() {
-            return mFullSpan;
+            return mSpanSize == mSpanCount;
+        }
+
+        public boolean isAlignSpan() {
+            return mSpanSize > 0;
+        }
+
+        public boolean isAlignHalfSpan() {
+            return mSpanSize > 0 && mSpanSize < mSpanCount;
+        }
+
+        public boolean isStaggeredSpan() {
+            return mSpanSize == 0;
+        }
+
+        public void setSpanCount(int spanCount) {
+            mSpanCount = spanCount;
+        }
+
+        public int getSpanCount() {
+            return mSpanCount;
+        }
+
+        public void setSpanSize(int alignHalfSpan) {
+            mSpanSize = alignHalfSpan;
+        }
+
+        public final int getSpanSize() {
+            if (mSpan == null) {
+                return INVALID_SPAN_ID;
+            }
+            return mSpanSize;
         }
 
         /**
@@ -2570,7 +2614,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 if (fsi != null && fsi.mGapDir == LayoutState.LAYOUT_START) {
                     mCachedStart -= fsi.getGapForSpan(mIndex);
                 }
-            }
+            } // TODO: 2022/12/14 mCachedStart -> getGapForSpan
         }
 
         // Use this one when default value does not make sense and not having a value means a bug.
@@ -2604,7 +2648,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 if (fsi != null && fsi.mGapDir == LayoutState.LAYOUT_END) {
                     mCachedEnd += fsi.getGapForSpan(mIndex);
                 }
-            }
+            } // TODO: 2022/12/14 mCachedEnd -> getGapForSpan
         }
 
         // Use this one when default value does not make sense and not having a value means a bug.
@@ -2873,7 +2917,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
         private static final int MIN_SIZE = 10;
         int[] mData;
-        List<FullSpanItem> mFullSpanItems;
+        List<FullSpanItem> mFullSpanItems; // TODO: 2022/12/16 直接新增了?
 
 
         /**
@@ -3187,7 +3231,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         int[] mSpanOffsets;
         int mSpanLookupSize;
         int[] mSpanLookup;
-        List<LazySpanLookup.FullSpanItem> mFullSpanItems;
+        List<LazySpanLookup.FullSpanItem> mFullSpanItems; // TODO: 2022/12/16 SS AlignSpan
         boolean mReverseLayout;
         boolean mAnchorLayoutFromEnd;
         boolean mLastLayoutRTL;
