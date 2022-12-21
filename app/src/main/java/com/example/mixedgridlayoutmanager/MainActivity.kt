@@ -19,16 +19,26 @@ class MainActivity : AppCompatActivity() {
         gggo(list)
     }
 
+    private val viewTypeOfFullSpan = 6
+    private val viewTypeOfStaggered = 0
+    private val viewTypeOfGrid = 1
     private fun gggo(list: RecyclerView) {
-        val viewTypeOfStaggered = 0
-        val viewTypeOfFullSpan = 1
-        val viewTypeOfGrid = 2
-        list.itemAnimator = DefaultItemAnimator()
         list.layoutManager = MixedGridLayoutManager2(
-            2,
-            RecyclerView.VERTICAL
+            6, RecyclerView.VERTICAL
         ).apply {
-//            this.setLazySpanLookup{it}
+            this.setSpanSizeLookup(object : MixedGridLayoutManager2.SpanSizeLookup{
+                override fun isStaggeredStyle(position: Int): Boolean {
+                    return x(position) == viewTypeOfStaggered
+                }
+
+                override fun getStaggeredSpanSize(): Int {
+                    return 2
+                }
+
+                override fun getGridSpanSize(position: Int): Int {
+                    return x(position)
+                }
+            })
         }
         list.adapter = object : RecyclerView.Adapter<ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -63,7 +73,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (holder.itemViewType == viewTypeOfFullSpan) {
                         (holder.itemView.layoutParams as MixedGridLayoutManager2.LayoutParams).apply {
-                            isFullSpan = true
+//                            spanSize = 2
                         }
                         setBackgroundColor(0xFFFF0000.toInt())
                     } else {
@@ -76,36 +86,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun getItemViewType(position: Int): Int {
-                return when (position) {
-                    0 -> {
-                        viewTypeOfStaggered
-                    }
-                    1 -> {
-                        viewTypeOfFullSpan
-                    }
-                    2, 3 -> {
-                        viewTypeOfStaggered
-                    }
-                    4 -> {
-                        viewTypeOfFullSpan
-                    }
-                    5, 6, 7 -> {
-                        viewTypeOfStaggered
-                    }
-                    8 -> {
-                        viewTypeOfFullSpan
-                    }
-
-                    in 9..20 -> {
-                        viewTypeOfStaggered
-                    }
-                    21 -> {
-                        viewTypeOfFullSpan
-                    }
-                    else -> {
-                        viewTypeOfGrid
-                    }
-                }
+                return x(position)
             }
 
             override fun getItemCount(): Int {
@@ -115,6 +96,40 @@ class MainActivity : AppCompatActivity() {
             override fun getItemId(position: Int): Long {
                 return super.getItemId(position)
             }
+        }
+        list.itemAnimator = DefaultItemAnimator()
+    }
+
+    private fun x(
+        position: Int
+    ) = when (position) {
+        0 -> {
+            viewTypeOfStaggered
+        }
+        1 -> {
+            viewTypeOfFullSpan
+        }
+        2, 3 -> {
+            viewTypeOfStaggered
+        }
+        4 -> {
+            viewTypeOfFullSpan
+        }
+        5, 6, 7 -> {
+            viewTypeOfStaggered
+        }
+        8 -> {
+            viewTypeOfFullSpan
+        }
+
+        in 9..20 -> {
+            viewTypeOfStaggered
+        }
+        21 -> {
+            viewTypeOfFullSpan
+        }
+        else -> {
+            viewTypeOfGrid
         }
     }
 }
