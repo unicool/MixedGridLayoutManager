@@ -1,6 +1,5 @@
 package com.example.mixedgridlayoutmanager
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -36,14 +35,14 @@ class MainActivity : AppCompatActivity() {
                 val density = parent.context.resources.displayMetrics.density.toInt()
                 val i10 = density * 10
                 return object : ViewHolder(FrameLayout(parent.context).apply {
-                    layoutParams = MixedGridLayoutManager2.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        marginStart = i10
-                        marginEnd = i10
-                        topMargin = i10
-                        bottomMargin = i10
-                    }
+                    layoutParams =
+                        (list.layoutManager as MixedGridLayoutManager2).generateDefaultLayoutParams()
+                            .apply {
+                                marginStart = i10
+                                marginEnd = i10
+                                topMargin = i10
+                                bottomMargin = i10
+                            }
                 }.apply {
                     addView(TextView(parent.context).apply {
 
