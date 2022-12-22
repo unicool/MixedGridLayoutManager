@@ -41,8 +41,9 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         RecyclerView.SmoothScroller.ScrollVectorProvider {
 
     private static final String TAG = "MixedGridLayoutManager2";
+    private static final String TAG2 = "FINNN";
 
-    static final boolean DEBUG = false;
+    static final boolean DEBUG = true;
 
     public static final int HORIZONTAL = RecyclerView.HORIZONTAL;
 
@@ -218,12 +219,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      */
     private int[] mPrefetchDistances;
 
-    private final Runnable mCheckForGapsRunnable = new Runnable() {
-        @Override
-        public void run() {
-            checkForGaps();
-        }
-    };
+    private final Runnable mCheckForGapsRunnable = this::checkForGaps;
 
     /**
      * Constructor used when layout manager is set in XML by RecyclerView attribute
@@ -1660,24 +1656,32 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 : mPrimaryOrientation.getStartAfterPadding();
         boolean added = false;
         View preView = null;
-        while (layoutState.hasMore(state)
-                && (mLayoutState.mInfinite || !mRemainingSpans.isEmpty())) {
+        while (layoutState.hasMore(state) && (mLayoutState.mInfinite || !mRemainingSpans.isEmpty())) {
             View view = layoutState.next(recycler);
             LayoutParams lp = ((LayoutParams) view.getLayoutParams());
             final int position = lp.getViewLayoutPosition();
-            final int spanIndex = mLazySpanLookup.getSpan(position);
+            if (preView == null) preView = findPreviousView(layoutState, state, position);
+            lp.mSpanSize = getSpanSize(position);
             Span currentSpan; // 定义水平起始位置用
+            final int spanIndex = mLazySpanLookup.getSpan(position);
             final boolean assignSpan = spanIndex == LayoutParams.INVALID_SPAN_ID;
             if (assignSpan) {
-                lp.mSpanSize = getSpanSize(position);
                 currentSpan = getNextSpan(layoutState, view, preView);
                 mLazySpanLookup.setSpan(position, currentSpan);
                 if (DEBUG) {
-                    Log.d(TAG, "assigned " + currentSpan.mIndex + " for " + position);
+                    Log.w(TAG2, "assigned " + currentSpan.mIndex + " for " + position + "\t" + view);
+                    if (preView != null) {
+                        final LayoutParams plp = (LayoutParams) preView.getLayoutParams();
+                        Log.e(TAG2, "preView assigned " + plp.mSpan.mIndex + " for " + plp.getViewLayoutPosition() + "\t" + preView);
+                    }
                 }
             } else {
                 if (DEBUG) {
-                    Log.d(TAG, "using " + spanIndex + " for pos " + position);
+                    Log.w(TAG2, "using " + spanIndex + " for pos " + position + "\t" + view);
+                    if (preView != null) {
+                        final LayoutParams plp = (LayoutParams) preView.getLayoutParams();
+                        Log.e(TAG2, "preView using " + plp.mSpan.mIndex + " for " + plp.getViewLayoutPosition() + "\t" + preView);
+                    }
                 }
                 currentSpan = mSpans[spanIndex];
             }
@@ -1705,7 +1709,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             } else {
                 end = getAlignStartLine(defaultNewViewLine, layoutState, view, preView);
                 start = end - mPrimaryOrientation.getDecoratedMeasurement(view);
-                final View rfr;
                 if (assignSpan && lp.isHashGap()) { // mGapPerSpan
                     LazySpanLookup.AlignSpanItem alignSpanItem;
                     alignSpanItem = createAlignSpanItemFromStart(end);
@@ -1785,21 +1788,11 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     }
 
     private void clearRemainingSpans(LayoutParams lp, LayoutState layoutState) {
-        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
         final int spanIndex = lp.getSpanIndex();
         final int spanSize = lp.getSpanSize();
-        int start;
-        final int end;
-        final int step;
-        if (preferLastSpan) {
-            start = spanIndex;
-            end = spanIndex + spanSize;
-            step = 1;
-        } else {
-            start = spanIndex + spanSize - 1;
-            end = spanIndex - 1;
-            step = -1;
-        }
+        int start = spanIndex;
+        final int end = spanIndex + spanSize;
+        final int step = 1;
         for (; start != end; start += step) {
             mRemainingSpans.set(start, false);
         }
@@ -1847,9 +1840,9 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (layoutState.mAvailable == 0) {
             // easy, recycle line is still valid
             if (layoutState.mLayoutDirection == LayoutState.LAYOUT_START) {
-                recycleFromEnd(recycler, layoutState.mEndLine, layoutState.mLayoutDirection);
+                recycleFromEnd(recycler, layoutState.mEndLine);
             } else {
-                recycleFromStart(recycler, layoutState.mStartLine, layoutState.mLayoutDirection);
+                recycleFromStart(recycler, layoutState.mStartLine);
             }
         } else {
             // scrolling case, recycle line can be shifted by how much space we could cover
@@ -1863,7 +1856,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 } else {
                     line = layoutState.mEndLine - Math.min(scrolled, layoutState.mAvailable);
                 }
-                recycleFromEnd(recycler, line, layoutState.mLayoutDirection);
+                recycleFromEnd(recycler, line);
             } else {
                 // calculate recycle line
                 int scrolled = getMinEnd(layoutState.mEndLine) - layoutState.mEndLine;
@@ -1873,7 +1866,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 } else {
                     line = layoutState.mStartLine + Math.min(scrolled, layoutState.mAvailable);
                 }
-                recycleFromStart(recycler, line, layoutState.mLayoutDirection);
+                recycleFromStart(recycler, line);
             }
         }
     }
@@ -1954,112 +1947,42 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (lp.isFullSpan()) {
             return getMaxEnd(def);
         }
-        if (lp.isAlignHalfSpan()) {
-            if (preView == null) {
-                return lp.mSpan.getEndLine(def);
-            }
-            final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
+        final LayoutParams preLp;
+        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
+            return lp.mSpan.getEndLine(def);
+        }
+        if (lp.isAlignHalfSpan()) { // 当前是水平网络
             final int prePosition = preLp.getViewLayoutPosition();
             final int preSpanSize = preLp.getSpanSize();
             final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
-            if (preLp.isAlignHalfSpan()) {
+            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
                 final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
                 final int index;
                 final boolean sameLine;
                 if (preferLastSpan) {
                     index = preSpanIndex - spanSize;
-                    sameLine = index >= 0;
+                    sameLine = index > -1;
                 } else {
                     index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize < mSpanCount;
+                    sameLine = index + spanSize <= mSpanCount;
                 }
                 if (sameLine) {
-                    return preLp.mSpan.getStartLine(def); // 同行同高即水平
+                    return preLp.mSpan.calculateViewStart(preView); // 同行同高即水平(top)
                 } else {
                     return getMaxEnd(def); // 新网格线: 网格满了
                 }
-            } else {
+            } else { // 上一个是瀑布流
                 return getMaxEnd(def); // 新网格线: 离开瀑布流
             }
-        } else {
-            if (preView == null) {
-                return lp.mSpan.getEndLine(def);
-            } else {
-                final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
-                if (preLp.isAlignHalfSpan()) {
-                    return getMaxEnd(def); // 新网格线: 离开网格
-                } else {
-                    final View rfRow = getRecentFirstRow(layoutState);
-                    final LayoutParams rfrLp = (LayoutParams) rfRow.getLayoutParams(); // not null
-                    if (rfrLp.isAlignHalfSpan()) {
-                        lp.setHasGap(true);
-                        return getMaxEnd(def); // 新网格线: 上一行存在瀑布流
-                    }
-                    return lp.mSpan.getEndLine(def); // 瀑布流可持续
+        } else { // 当前是瀑布流
+            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
+                return getMaxEnd(def); // 新网格线: 离开网格
+            } else {// 上一个也是瀑布流
+                if (checkPreRowIfAlign(layoutState)) {
+                    lp.setHasGap(true);
+                    return preLp.mSpan.getStartLine(def); // 瀑布流留在当前行, 是`getMaxEnd`(top)
                 }
-            }
-        }
-    }
-
-    @Nullable
-    private View getRecentFirstRow(LayoutState layoutState) {
-        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int first = preferLastSpan ? mSpanCount - 1 : 0;
-        ArrayList<View> mViews = mSpans[first].mViews;
-        if (mViews.isEmpty()) return null;
-        return mViews.get(mViews.size() - 1);
-    }
-
-    private int getAlignStartLine(int def, LayoutState layoutState, View view, @Nullable View preView) {
-        final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
-        lp.setHasGap(false); // reset
-        final int spanSize = lp.getSpanSize();
-        if (lp.isFullSpan()) {
-            return getMinStart(def);
-        }
-        if (lp.isAlignHalfSpan()) {
-            if (preView == null) {
-                return lp.mSpan.getStartLine(def);
-            }
-            final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
-            final int prePosition = preLp.getViewLayoutPosition();
-            final int preSpanSize = preLp.getSpanSize();
-            final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
-            if (preLp.isAlignHalfSpan()) {
-                final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-                final int index;
-                final boolean sameLine;
-                if (preferLastSpan) {
-                    index = preSpanIndex - spanSize;
-                    sameLine = index >= 0;
-                } else {
-                    index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize < mSpanCount;
-                }
-                if (sameLine) {
-                    return preLp.mSpan.getEndLine(def); // 同行同高即水平
-                } else {
-                    return getMinStart(def); // 新网格线: 网格满了
-                }
-            } else {
-                return getMinStart(def); // 新网格线: 离开瀑布流
-            }
-        } else {
-            if (preView == null) {
-                return lp.mSpan.getStartLine(def);
-            } else {
-                final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
-                if (preLp.isAlignHalfSpan()) {
-                    return getMinStart(def); // 新网格线: 离开网格
-                } else {
-                    final View rfRow = getRecentFirstRow(layoutState);
-                    final LayoutParams rfrLp = (LayoutParams) rfRow.getLayoutParams(); // not null
-                    if (rfrLp.isAlignHalfSpan()) {
-                        lp.setHasGap(true);
-                        return getMinStart(def); // 新网格线: 上一行存在瀑布流
-                    }
-                    return lp.mSpan.getStartLine(def); // 瀑布流可持续
-                }
+                return lp.mSpan.getEndLine(def); // 瀑布流可持续
             }
         }
     }
@@ -2075,6 +1998,53 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return maxEnd;
     }
 
+    private int getAlignStartLine(int def, LayoutState layoutState, View view, @Nullable View preView) {
+        final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
+        lp.setHasGap(false); // reset
+        final int spanSize = lp.getSpanSize();
+        if (lp.isFullSpan()) {
+            return getMinStart(def);
+        }
+        final LayoutParams preLp;
+        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
+            return lp.mSpan.getStartLine(def);
+        }
+        if (lp.isAlignHalfSpan()) { // 当前是水平网络
+            final int prePosition = preLp.getViewLayoutPosition();
+            final int preSpanSize = preLp.getSpanSize();
+            final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
+            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
+                final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+                final int index;
+                final boolean sameLine;
+                if (preferLastSpan) {
+                    index = preSpanIndex - spanSize;
+                    sameLine = index > -1;
+                } else {
+                    index = preSpanIndex + preSpanSize;
+                    sameLine = index + spanSize <= mSpanCount;
+                }
+                if (sameLine) {
+                    return preLp.mSpan.calculateViewEnd(preView); // 同行同高即水平(bottom)
+                } else {
+                    return getMinStart(def); // 新网格线: 网格满了
+                }
+            } else { // 上一个是瀑布流
+                return getMinStart(def); // 新网格线: 离开瀑布流
+            }
+        } else { // 当前是瀑布流
+            if (preLp.isAlignHalfSpan()) {
+                return getMinStart(def); // 新网格线: 离开网格
+            } else {// 上一个也是瀑布流
+                if (checkPreRowIfAlign(layoutState)) { // mViews.add(0, view);
+                    lp.setHasGap(true);
+                    return preLp.mSpan.getEndLine(def); // (bottom)
+                }
+                return lp.mSpan.getStartLine(def); // 瀑布流可持续
+            }
+        }
+    }
+
     private int getMinEnd(int def) {
         int minEnd = mSpans[0].getEndLine(def);
         for (int i = 1; i < mSpanCount; i++) {
@@ -2086,34 +2056,37 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return minEnd;
     }
 
-    private void recycleFromStart(RecyclerView.Recycler recycler, int line, int mLayoutDirection) {
+    /**
+     * @return true 瀑布流需要水平分配
+     */
+    private boolean checkPreRowIfAlign(LayoutState layoutState) {
+        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+        final int first = preferLastSpan ? mSpanCount - 1 : 0;
+        final ArrayList<View> mViews = mSpans[first].mViews;
+        final int size = mViews.size();
+        final int preRowIndex = layoutState.mLayoutDirection == LayoutState.LAYOUT_END ? size - 2 : 1;
+        if (preRowIndex < 0 || preRowIndex >= size) return false;
+        final View view = mViews.get(preRowIndex);
+        final LayoutParams layoutParams = (LayoutParams) view.getLayoutParams();
+        return layoutParams.isAlignHalfSpan();
+    }
+
+    private void recycleFromStart(RecyclerView.Recycler recycler, int line) {
         while (getChildCount() > 0) {
             View child = getChildAt(0);
             if (mPrimaryOrientation.getDecoratedEnd(child) <= line
                     && mPrimaryOrientation.getTransformedEndWithDecoration(child) <= line) {
                 LayoutParams lp = (LayoutParams) child.getLayoutParams();
                 // Don't recycle the last View in a span not to lose span's start/end lines
-                final boolean preferLastSpan = preferLastSpan(mLayoutDirection);
                 final int spanIndex = lp.getSpanIndex();
                 final int spanSize = lp.getSpanSize();
-                final int start;
-                final int end;
-                final int step;
-                if (preferLastSpan) {
-                    start = spanIndex;
-                    end = spanIndex + spanSize;
-                    step = 1;
-                } else {
-                    start = spanIndex + spanSize - 1;
-                    end = spanIndex - 1;
-                    step = -1;
-                }
-                for (int j = start; j != end; j += step) {
+                final int end = spanIndex + spanSize;
+                for (int j = spanIndex; j != end; j++) {
                     if (mSpans[j].mViews.size() == 1) {
                         return;
                     }
                 }
-                for (int j = start; j != end; j += step) {
+                for (int j = spanIndex; j != end; j++) {
                     mSpans[j].popStart();
                 }
                 removeAndRecycleView(child, recycler);
@@ -2123,7 +2096,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         }
     }
 
-    private void recycleFromEnd(RecyclerView.Recycler recycler, int line, int mLayoutDirection) {
+    private void recycleFromEnd(RecyclerView.Recycler recycler, int line) {
         final int childCount = getChildCount();
         int i;
         for (i = childCount - 1; i >= 0; i--) {
@@ -2132,27 +2105,15 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     && mPrimaryOrientation.getTransformedStartWithDecoration(child) >= line) {
                 LayoutParams lp = (LayoutParams) child.getLayoutParams();
                 // Don't recycle the last View in a span not to lose span's start/end lines
-                final boolean preferLastSpan = preferLastSpan(mLayoutDirection);
                 final int spanIndex = lp.getSpanIndex();
                 final int spanSize = lp.getSpanSize();
-                final int start;
-                final int end;
-                final int step;
-                if (preferLastSpan) {
-                    start = spanIndex;
-                    end = spanIndex + spanSize;
-                    step = 1;
-                } else {
-                    start = spanIndex + spanSize - 1;
-                    end = spanIndex - 1;
-                    step = -1;
-                }
-                for (int j = start; j != end; j += step) {
+                final int end = spanIndex + spanSize;
+                for (int j = spanIndex; j != end; j++) {
                     if (mSpans[j].mViews.size() == 1) {
                         return;
                     }
                 }
-                for (int j = start; j != end; j += step) {
+                for (int j = spanIndex; j != end; j++) {
                     mSpans[j].popEnd();
                 }
                 removeAndRecycleView(child, recycler);
@@ -2172,6 +2133,38 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return ((layoutDir == LayoutState.LAYOUT_START) == mShouldReverseLayout) == isLayoutRTL();
     }
 
+    @Nullable
+    private View findPreviousView(LayoutState layoutState, RecyclerView.State state, int position) {
+        final int prePosition = position - layoutState.mLayoutDirection;
+        if (prePosition >= 0 && prePosition < state.getItemCount()) {
+            final int count = getChildCount();
+            if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
+                for (int i = count - 1; i >= 0; i--) {
+                    final View childAt = getChildAt(i);
+                    final LayoutParams clp = (LayoutParams) childAt.getLayoutParams();
+                    if (DEBUG) {
+                        Log.v(TAG2, "findPreviousView:" + count + "\t" + i + " prePosition:" + prePosition + "\t" + childAt);
+                    }
+                    if (clp.getViewLayoutPosition() == prePosition) {
+                        return childAt;
+                    }
+                }
+            } else {
+                for (int i = 0; i < count; i++) {
+                    final View childAt = getChildAt(i);
+                    final LayoutParams clp = (LayoutParams) childAt.getLayoutParams();
+                    if (DEBUG) {
+                        Log.v(TAG2, "findPreviousView:" + count + "\t" + i + " prePosition:" + prePosition + "\t" + childAt);
+                    }
+                    if (clp.getViewLayoutPosition() == prePosition) {
+                        return childAt;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * 解决 mIndex 的问题
      */
@@ -2182,24 +2175,24 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             return mSpans[0];
         }
         final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int first = preferLastSpan ? mSpanCount - 1 : 0;
+        final int first = preferLastSpan ? mSpanCount - spanSize : 0;
+        final LayoutParams preLp;
+        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
+            return mSpans[first];
+        }
+        final int prePosition = preLp.getViewLayoutPosition();
+        final int preSpanSize = preLp.getSpanSize();
+        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
         if (lp.isAlignHalfSpan()) {
-            if (preView == null) {
-                return mSpans[first];
-            }
-            final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
-            final int prePosition = preLp.getViewLayoutPosition();
-            final int preSpanSize = preLp.getSpanSize();
-            final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
             if (preLp.isAlignHalfSpan()) {
                 final int index;
                 final boolean sameLine;
                 if (preferLastSpan) {
                     index = preSpanIndex - spanSize; // note: spans index 始终从左到右
-                    sameLine = index >= 0;
+                    sameLine = index > -1;
                 } else {
                     index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize < mSpanCount;
+                    sameLine = index + spanSize <= mSpanCount;
                 }
                 if (sameLine) {
                     return mSpans[index];
@@ -2210,15 +2203,26 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 return mSpans[first]; // 新的一行: 离开瀑布流
             }
         } else {
-            if (preView == null) {
-                return getNextSpan(layoutState);
+            if (preLp.isAlignHalfSpan()) {
+                return mSpans[first]; // 新的一行: 离开网格
             } else {
-                final LayoutParams preLp = ((LayoutParams) preView.getLayoutParams());
-                if (preLp.isAlignHalfSpan()) {
-                    return mSpans[first]; // 新的一行: 离开网格
-                } else {
-                    return getNextSpan(layoutState);
+                if (checkPreRowIfAlign(layoutState)) {
+                    final int index; // note 当前 index >=1, 前一行是水平网格, 重新分配按水平
+                    final boolean sameLine;
+                    if (preferLastSpan) {
+                        index = preSpanIndex - spanSize;
+                        sameLine = index > -1;
+                    } else {
+                        index = preSpanIndex + preSpanSize;
+                        sameLine = index + spanSize <= mSpanCount;
+                    }
+                    if (sameLine) {
+                        return mSpans[index];
+                    } else {
+                        return mSpans[first];
+                    }
                 }
+                return getNextSpan(layoutState, lp);
             }
         }
     }
@@ -2226,23 +2230,24 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     /**
      * Finds the span for the next view.
      */
-    private Span getNextSpan(LayoutState layoutState) {
+    private Span getNextSpan(LayoutState layoutState, LayoutParams lp) {
+        final int spanSize = lp.getSpanSize();
         final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int startIndex, endIndex, diff;
+        final int startIndex, endIndex, step;
         if (preferLastSpan) {
-            startIndex = mSpanCount - 1;
+            startIndex = mSpanCount - spanSize;
             endIndex = -1;
-            diff = -1;
+            step = -spanSize;
         } else {
             startIndex = 0;
             endIndex = mSpanCount;
-            diff = 1;
+            step = spanSize;
         }
         if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
             Span min = null;
             int minLine = Integer.MAX_VALUE;
             final int defaultLine = mPrimaryOrientation.getStartAfterPadding();
-            for (int i = startIndex; i != endIndex; i += diff) {
+            for (int i = startIndex; i < endIndex; i += step) {
                 final Span other = mSpans[i];
                 int otherLine = other.getEndLine(defaultLine);
                 if (otherLine < minLine) {
@@ -2255,7 +2260,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             Span max = null;
             int maxLine = Integer.MIN_VALUE;
             final int defaultLine = mPrimaryOrientation.getEndAfterPadding();
-            for (int i = startIndex; i != endIndex; i += diff) {
+            for (int i = startIndex; i > endIndex; i += step) {
                 final Span other = mSpans[i];
                 int otherLine = other.getStartLine(defaultLine);
                 if (otherLine > maxLine) {
@@ -2799,15 +2804,20 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
         void calculateCachedStart() {
             final View startView = mViews.get(0);
+            mCachedStart = calculateViewStart(startView);
+        }
+
+        int calculateViewStart(View startView) {
+            int mCachedStart;
             final LayoutParams lp = getLayoutParams(startView);
             mCachedStart = mPrimaryOrientation.getDecoratedStart(startView);
             if (lp.isHashGap()) {
-                LazySpanLookup.AlignSpanItem fsi = mLazySpanLookup
-                        .getFullSpanItem(lp.getViewLayoutPosition());
+                LazySpanLookup.AlignSpanItem fsi = mLazySpanLookup.getFullSpanItem(lp.getViewLayoutPosition());
                 if (fsi != null && fsi.mGapDir == LayoutState.LAYOUT_START) {
                     mCachedStart -= fsi.getGapForSpan(mIndex);
                 }
             }
+            return mCachedStart;
         }
 
         // Use this one when default value does not make sense and not having a value means a bug.
@@ -2833,15 +2843,20 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
         void calculateCachedEnd() {
             final View endView = mViews.get(mViews.size() - 1);
+            mCachedEnd = calculateViewEnd(endView);
+        }
+
+        int calculateViewEnd(View endView) {
+            int mCachedEnd;
             final LayoutParams lp = getLayoutParams(endView);
             mCachedEnd = mPrimaryOrientation.getDecoratedEnd(endView);
             if (lp.isHashGap()) {
-                LazySpanLookup.AlignSpanItem fsi = mLazySpanLookup
-                        .getFullSpanItem(lp.getViewLayoutPosition());
+                LazySpanLookup.AlignSpanItem fsi = mLazySpanLookup.getFullSpanItem(lp.getViewLayoutPosition());
                 if (fsi != null && fsi.mGapDir == LayoutState.LAYOUT_END) {
                     mCachedEnd += fsi.getGapForSpan(mIndex);
                 }
             }
+            return mCachedEnd;
         }
 
         // Use this one when default value does not make sense and not having a value means a bug.
