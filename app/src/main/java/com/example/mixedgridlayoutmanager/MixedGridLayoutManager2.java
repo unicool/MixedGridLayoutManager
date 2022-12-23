@@ -1951,12 +1951,12 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
             return lp.mSpan.getEndLine(def);
         }
+        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+        final int prePosition = preLp.getViewLayoutPosition();
+        final int preSpanSize = preLp.getSpanSize();
+        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
         if (lp.isAlignHalfSpan()) { // 当前是水平网络
-            final int prePosition = preLp.getViewLayoutPosition();
-            final int preSpanSize = preLp.getSpanSize();
-            final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
             if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
-                final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
                 final int index;
                 final boolean sameLine;
                 if (preferLastSpan) {
@@ -1967,22 +1967,32 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     sameLine = index + spanSize <= mSpanCount;
                 }
                 if (sameLine) {
-                    return preLp.mSpan.calculateViewStart(preView); // 同行同高即水平(top)
+                    return mPrimaryOrientation.getDecoratedStart(preView); // 同行同高即水平(top)
                 } else {
-                    return getMaxEnd(def); // 新网格线: 网格满了
+                    return getMaxEnd(def);
                 }
             } else { // 上一个是瀑布流
-                return getMaxEnd(def); // 新网格线: 离开瀑布流
+                return getMaxEnd(def);
             }
         } else { // 当前是瀑布流
             if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
-                return getMaxEnd(def); // 新网格线: 离开网格
-            } else {// 上一个也是瀑布流
-                if (checkPreRowIfAlign(layoutState)) {
+                return getMaxEnd(def);
+            } else { // 上一个也是瀑布流
+                if (checkPreRowIfAlignGrid(layoutState)) {
                     lp.setHasGap(true);
-                    return preLp.mSpan.getStartLine(def); // 瀑布流留在当前行, 是`getMaxEnd`(top)
+                    final boolean sameLine;
+                    if (preferLastSpan) {
+                        sameLine = (preSpanIndex - spanSize) > -1;
+                    } else {
+                        sameLine = (preSpanIndex + preSpanSize) + spanSize <= mSpanCount;
+                    }
+                    if (sameLine) {
+                        return mPrimaryOrientation.getDecoratedStart(preView); // 瀑布流留在当前行, 是`getMaxEnd`(top)
+                    } else {
+                        return lp.mSpan.getEndLine(def);
+                    }
                 }
-                return lp.mSpan.getEndLine(def); // 瀑布流可持续
+                return lp.mSpan.getEndLine(def);
             }
         }
     }
@@ -2009,12 +2019,12 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
             return lp.mSpan.getStartLine(def);
         }
+        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+        final int prePosition = preLp.getViewLayoutPosition();
+        final int preSpanSize = preLp.getSpanSize();
+        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
         if (lp.isAlignHalfSpan()) { // 当前是水平网络
-            final int prePosition = preLp.getViewLayoutPosition();
-            final int preSpanSize = preLp.getSpanSize();
-            final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
             if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
-                final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
                 final int index;
                 final boolean sameLine;
                 if (preferLastSpan) {
@@ -2025,22 +2035,32 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     sameLine = index + spanSize <= mSpanCount;
                 }
                 if (sameLine) {
-                    return preLp.mSpan.calculateViewEnd(preView); // 同行同高即水平(bottom)
+                    return mPrimaryOrientation.getDecoratedEnd(preView); // 同行同高即水平(bottom)
                 } else {
-                    return getMinStart(def); // 新网格线: 网格满了
+                    return getMinStart(def);
                 }
             } else { // 上一个是瀑布流
-                return getMinStart(def); // 新网格线: 离开瀑布流
+                return getMinStart(def);
             }
         } else { // 当前是瀑布流
-            if (preLp.isAlignHalfSpan()) {
-                return getMinStart(def); // 新网格线: 离开网格
+            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
+                return getMinStart(def);
             } else {// 上一个也是瀑布流
-                if (checkPreRowIfAlign(layoutState)) { // mViews.add(0, view);
+                if (checkPreRowIfAlignGrid(layoutState)) { // mViews.add(0, view);
                     lp.setHasGap(true);
-                    return preLp.mSpan.getEndLine(def); // (bottom)
+                    final boolean sameLine;
+                    if (preferLastSpan) {
+                        sameLine = (preSpanIndex - spanSize) > -1;
+                    } else {
+                        sameLine = (preSpanIndex + preSpanSize) + spanSize <= mSpanCount;
+                    }
+                    if (sameLine) {
+                        return mPrimaryOrientation.getDecoratedEnd(preView); // 瀑布流留在当前行,(bottom)
+                    } else {
+                        return lp.mSpan.getStartLine(def);
+                    }
                 }
-                return lp.mSpan.getStartLine(def); // 瀑布流可持续
+                return lp.mSpan.getStartLine(def);
             }
         }
     }
@@ -2059,7 +2079,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     /**
      * @return true 瀑布流需要水平分配
      */
-    private boolean checkPreRowIfAlign(LayoutState layoutState) {
+    private boolean checkPreRowIfAlignGrid(LayoutState layoutState) {
         final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
         final int first = preferLastSpan ? mSpanCount - 1 : 0;
         final ArrayList<View> mViews = mSpans[first].mViews;
@@ -2183,8 +2203,8 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         final int prePosition = preLp.getViewLayoutPosition();
         final int preSpanSize = preLp.getSpanSize();
         final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
-        if (lp.isAlignHalfSpan()) {
-            if (preLp.isAlignHalfSpan()) {
+        if (lp.isAlignHalfSpan()) { // 当前是水平网络
+            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
                 final int index;
                 final boolean sameLine;
                 if (preferLastSpan) {
@@ -2197,16 +2217,16 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 if (sameLine) {
                     return mSpans[index];
                 } else {
-                    return mSpans[first]; // 新的一行: 网格满了
+                    return mSpans[first];
                 }
-            } else {
-                return mSpans[first]; // 新的一行: 离开瀑布流
+            } else { // 上一个是瀑布流
+                return mSpans[first];
             }
-        } else {
-            if (preLp.isAlignHalfSpan()) {
-                return mSpans[first]; // 新的一行: 离开网格
-            } else {
-                if (checkPreRowIfAlign(layoutState)) {
+        } else { // 当前是瀑布流
+            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
+                return mSpans[first];
+            } else { // 上一个也是瀑布流
+                if (checkPreRowIfAlignGrid(layoutState)) {
                     final int index; // note 当前 index >=1, 前一行是水平网格, 重新分配按水平
                     final boolean sameLine;
                     if (preferLastSpan) {
@@ -2219,7 +2239,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     if (sameLine) {
                         return mSpans[index];
                     } else {
-                        return mSpans[first];
+                        return getNextSpan(layoutState, lp);
                     }
                 }
                 return getNextSpan(layoutState, lp);
