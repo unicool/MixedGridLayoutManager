@@ -1133,23 +1133,15 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     private void measureChildWithDecorationsAndMargin(View child, LayoutParams lp, boolean alreadyMeasured) {
         if (lp.isFullSpan()) {
             if (mOrientation == VERTICAL) {
-                measureChildWithDecorationsAndMargin(child, mFullSizeSpec,
-                        getChildMeasureSpec(
-                                getHeight(),
-                                getHeightMode(),
-                                getPaddingTop() + getPaddingBottom(),
-                                lp.height,
-                                true),
+                measureChildWithDecorationsAndMargin(child,
+                        mFullSizeSpec,
+                        getChildMeasureSpec(getHeight(), getHeightMode(),
+                                getPaddingTop() + getPaddingBottom(), lp.height, true),
                         alreadyMeasured);
             } else {
-                measureChildWithDecorationsAndMargin(
-                        child,
-                        getChildMeasureSpec(
-                                getWidth(),
-                                getWidthMode(),
-                                getPaddingLeft() + getPaddingRight(),
-                                lp.width,
-                                true),
+                measureChildWithDecorationsAndMargin(child,
+                        getChildMeasureSpec(getWidth(), getWidthMode(),
+                                getPaddingLeft() + getPaddingRight(), lp.width, true),
                         mFullSizeSpec,
                         alreadyMeasured);
             }
@@ -1159,41 +1151,39 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             if (mOrientation == VERTICAL) {
                 // Padding for width measure spec is 0 because left and right padding were already
                 // factored into mSizePerSpan.
-                measureChildWithDecorationsAndMargin(
-                        child,
-                        getChildMeasureSpec(
-                                mSizePerSpan,
-                                getWidthMode(),
-                                0,
-                                lp.width,
-                                false),
-                        getChildMeasureSpec(
-                                getHeight(),
-                                getHeightMode(),
-                                getPaddingTop() + getPaddingBottom(),
-                                lp.height,
-                                true),
+                measureChildWithDecorationsAndMargin(child,
+                        getChildMeasureSpec(mSizePerSpan, getWidthMode(),
+                                0, lp.width, false),
+                        getChildMeasureSpec(getHeight(), getHeightMode(),
+                                getPaddingTop() + getPaddingBottom(), lp.height, true),
                         alreadyMeasured);
             } else {
                 // Padding for height measure spec is 0 because top and bottom padding were already
                 // factored into mSizePerSpan.
-                measureChildWithDecorationsAndMargin(
-                        child,
-                        getChildMeasureSpec(
-                                getWidth(),
-                                getWidthMode(),
-                                getPaddingLeft() + getPaddingRight(),
-                                lp.width,
-                                true),
-                        getChildMeasureSpec(
-                                mSizePerSpan,
-                                getHeightMode(),
-                                0,
-                                lp.height,
-                                false),
+                measureChildWithDecorationsAndMargin(child,
+                        getChildMeasureSpec(getWidth(), getWidthMode(),
+                                getPaddingLeft() + getPaddingRight(), lp.width, true),
+                        getChildMeasureSpec(mSizePerSpan, getHeightMode(),
+                                0, lp.height, false),
                         alreadyMeasured);
             }
         }
+    }
+
+    private void measureChildWithDecorationsAndMargin(View view, LayoutParams lp, int maxSize) {
+        final int totalSpaceInOther = this.mSizePerSpan * lp.getSpanSize(); // 跨格
+        final int wSpec;
+        final int hSpec;
+        if (mOrientation == VERTICAL) {
+            wSpec = getChildMeasureSpec(totalSpaceInOther, getWidthMode(), // View.MeasureSpec.EXACTLY
+                    0, lp.width, false);
+            hSpec = View.MeasureSpec.makeMeasureSpec(maxSize, View.MeasureSpec.EXACTLY);
+        } else {
+            wSpec = View.MeasureSpec.makeMeasureSpec(maxSize, View.MeasureSpec.EXACTLY);
+            hSpec = getChildMeasureSpec(totalSpaceInOther, getHeightMode(), // View.MeasureSpec.EXACTLY
+                    0, lp.height, false);
+        }
+        measureChildWithDecorationsAndMargin(view, wSpec, hSpec, true);
     }
 
     private void measureChildWithDecorationsAndMargin(View child, int widthSpec,
@@ -1655,66 +1645,155 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 ? mPrimaryOrientation.getEndAfterPadding()
                 : mPrimaryOrientation.getStartAfterPadding();
         boolean added = false;
+        Brother nextView = null;
         View preView = null;
-        while (layoutState.hasMore(state) && (mLayoutState.mInfinite || !mRemainingSpans.isEmpty())) {
-            View view = layoutState.next(recycler);
-            LayoutParams lp = ((LayoutParams) view.getLayoutParams());
-            final int position = lp.getViewLayoutPosition();
+        while (mLayoutState.mInfinite || !mRemainingSpans.isEmpty()) {
+            final View view;
+            final LayoutParams lp;
+            int position;
+            if (nextView != null) {
+                view = nextView.view;
+                lp = nextView.lp;
+                position = nextView.position;
+                nextView = null;
+            } else if (layoutState.hasMore(state)) {
+                view = layoutState.next(recycler);
+                lp = ((LayoutParams) view.getLayoutParams());
+                position = lp.getViewLayoutPosition();
+                lp.mSpanSize = getSpanSize(position);
+            } else {
+                break;
+            }
             if (preView == null) preView = findPreviousView(layoutState, state, position);
-            lp.mSpanSize = getSpanSize(position);
-            Span currentSpan; // 定义水平起始位置用
+
             final int spanIndex = mLazySpanLookup.getSpan(position);
             final boolean assignSpan = spanIndex == LayoutParams.INVALID_SPAN_ID;
-            if (assignSpan) {
-                currentSpan = getNextSpan(layoutState, view, preView);
-                mLazySpanLookup.setSpan(position, currentSpan);
-                if (DEBUG) {
-                    Log.w(TAG2, "assigned " + currentSpan.mIndex + " for " + position + "\t" + view);
-                    if (preView != null) {
-                        final LayoutParams plp = (LayoutParams) preView.getLayoutParams();
-                        Log.e(TAG2, "preView assigned " + plp.mSpan.mIndex + " for " + plp.getViewLayoutPosition() + "\t" + preView);
+            @Nullable List<Brother> brothers = null;
+            if (lp.isAlignHalfSpan()) {
+                int remainSize;
+                if (assignSpan) {
+                    remainSize = mSpanCount - lp.getSpanSize();
+                } else {
+                    final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+                    if (preferLastSpan) remainSize = spanIndex; else remainSize = mSpanCount - spanIndex - lp.getSpanSize();
+                }
+                if (remainSize > 0) while (layoutState.hasMore(state)) {
+                    View v = layoutState.next(recycler);
+                    LayoutParams l = ((LayoutParams) v.getLayoutParams());
+                    int p = l.getViewLayoutPosition();
+                    int spanSize = getSpanSize(p);
+                    l.mSpanSize = spanSize;
+                    remainSize -= spanSize;
+                    if (l.isAlignHalfSpan() && remainSize >= 0) {
+                        if (brothers == null) brothers = new ArrayList<>(mSpanCount);
+                        brothers.add(Brother.get(v, l, p));
+                        if (remainSize == 0) break;
+                    } else {
+                        nextView = Brother.get(v, l, p);
+                        break;
                     }
+                }
+            }
+
+            Span currentSpan; // 定义水平起始位置用
+            if (assignSpan) {
+                currentSpan = getNextSpan(layoutState, view, preView, brothers);
+                mLazySpanLookup.setSpan(position, currentSpan);
+                if (brothers != null) for (Brother brother : brothers) {
+                    mLazySpanLookup.setSpan(brother.position, brother.currentSpan);
+                }
+                if (DEBUG) {
+                    Log.d(TAG, "assigned " + currentSpan.mIndex + " for " + position);
                 }
             } else {
                 if (DEBUG) {
-                    Log.w(TAG2, "using " + spanIndex + " for pos " + position + "\t" + view);
-                    if (preView != null) {
-                        final LayoutParams plp = (LayoutParams) preView.getLayoutParams();
-                        Log.e(TAG2, "preView using " + plp.mSpan.mIndex + " for " + plp.getViewLayoutPosition() + "\t" + preView);
-                    }
+                    Log.d(TAG, "using " + spanIndex + " for pos " + position);
                 }
                 currentSpan = mSpans[spanIndex];
+                checkNextSpans(layoutState, spanIndex, lp.getSpanSize(), brothers); // mLazySpanLookup.setSpan
             }
             // assign span before measuring so that item decorators can get updated span index
             lp.mSpan = currentSpan;
+            if (brothers != null) for (Brother brother : brothers) {
+                brother.lp.mSpan = brother.currentSpan;
+            }
+
             if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
                 addView(view);
+                if (brothers != null) for (Brother brother : brothers) {
+                    addView(brother.view);
+                }
             } else {
                 addView(view, 0);
+                if (brothers != null) for (Brother brother : brothers) {
+                    addView(brother.view, 0);
+                }
             }
+
             measureChildWithDecorationsAndMargin(view, lp, false);
+            int maxSize = mPrimaryOrientation.getDecoratedMeasurement(view);
+
+            if (brothers != null) for (Brother brother : brothers) {
+                measureChildWithDecorationsAndMargin(brother.view, brother.lp, false);
+                maxSize = Math.max(maxSize, mPrimaryOrientation.getDecoratedMeasurement(brother.view));
+            }
+            if (brothers != null) {
+                if (maxSize != mPrimaryOrientation.getDecoratedMeasurement(view)) {
+                    measureChildWithDecorationsAndMargin(view, lp, maxSize);
+                }
+                for (Brother brother : brothers) {
+                    if (maxSize != mPrimaryOrientation.getDecoratedMeasurement(brother.view)) {
+                        measureChildWithDecorationsAndMargin(brother.view, brother.lp, maxSize);
+                    }
+                }
+            }
+
 
             final int start;
             final int end;
             if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
-                start = getAlignEndLine(defaultNewViewLine, layoutState, view, preView);
+                start = getAlignEndLine(defaultNewViewLine, layoutState, view, preView, brothers);
                 end = start + mPrimaryOrientation.getDecoratedMeasurement(view);
                 if (assignSpan && lp.isAlignSpan()) { // 记录其之上的间隙
-                    LazySpanLookup.AlignSpanItem alignSpanItem;
-                    alignSpanItem = createAlignSpanItemFromEnd(start);
-                    alignSpanItem.mGapDir = LayoutState.LAYOUT_START;
-                    alignSpanItem.mPosition = position;
-                    mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                    LazySpanLookup.AlignSpanItem alignSpanItem = createAlignSpanItemFromEnd(start, lp);
+                    if (alignSpanItem != null) {
+                        alignSpanItem.mGapDir = LayoutState.LAYOUT_START;
+                        alignSpanItem.mPosition = position;
+                        mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                    }
+                }
+                if (brothers != null) for (Brother brother : brothers) {
+                    brother.end = brother.start + mPrimaryOrientation.getDecoratedMeasurement(brother.view);
+                    if (assignSpan && lp.isAlignSpan()) {
+                        LazySpanLookup.AlignSpanItem alignSpanItem = createAlignSpanItemFromEnd(brother.start, brother.lp);
+                        if (alignSpanItem != null) {
+                            alignSpanItem.mGapDir = LayoutState.LAYOUT_START;
+                            alignSpanItem.mPosition = brother.position;
+                            mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                        }
+                    }
                 }
             } else {
-                end = getAlignStartLine(defaultNewViewLine, layoutState, view, preView);
+                end = getAlignStartLine(defaultNewViewLine, layoutState, view, preView, brothers);
                 start = end - mPrimaryOrientation.getDecoratedMeasurement(view);
                 if (assignSpan && lp.isAlignSpan()) { // 记录其之下的间隙
-                    LazySpanLookup.AlignSpanItem alignSpanItem;
-                    alignSpanItem = createAlignSpanItemFromStart(end);
-                    alignSpanItem.mGapDir = LayoutState.LAYOUT_END;
-                    alignSpanItem.mPosition = position;
-                    mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                    LazySpanLookup.AlignSpanItem alignSpanItem = createAlignSpanItemFromStart(end, lp);
+                    if (alignSpanItem != null) {
+                        alignSpanItem.mGapDir = LayoutState.LAYOUT_END;
+                        alignSpanItem.mPosition = position;
+                        mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                    }
+                }
+                if (brothers != null) for (Brother brother : brothers) {
+                    brother.start = brother.end - mPrimaryOrientation.getDecoratedMeasurement(brother.view);
+                    if (assignSpan && lp.isAlignSpan()) {
+                        LazySpanLookup.AlignSpanItem alignSpanItem = createAlignSpanItemFromStart(brother.end, brother.lp);
+                        if (alignSpanItem != null) {
+                            alignSpanItem.mGapDir = LayoutState.LAYOUT_END;
+                            alignSpanItem.mPosition = brother.position;
+                            mLazySpanLookup.addAlignSpanItem(alignSpanItem);
+                        }
+                    }
                 }
             }
 
@@ -1739,30 +1818,50 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 }
             }
             attachViewToSpans(view, lp, layoutState);
+            if (brothers != null) for (Brother brother : brothers) {
+                attachViewToSpans(brother.view, brother.lp, layoutState);
+            }
             final int otherStart;
             final int otherEnd;
             if (isLayoutRTL() && mOrientation == VERTICAL) {
                 otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - 1 - currentSpan.mIndex) * mSizePerSpan;
                 otherStart = otherEnd - mSecondaryOrientation.getDecoratedMeasurement(view);
+                if (brothers != null) for (Brother brother : brothers) {
+                    brother.otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - 1 - brother.currentSpan.mIndex) * mSizePerSpan;
+                    brother.otherStart = brother.otherEnd - mSecondaryOrientation.getDecoratedMeasurement(brother.view);
+                }
             } else {
                 otherStart = currentSpan.mIndex * mSizePerSpan + mSecondaryOrientation.getStartAfterPadding();
                 otherEnd = otherStart + mSecondaryOrientation.getDecoratedMeasurement(view);
+                if (brothers != null) for (Brother brother : brothers) {
+                    brother.otherStart = brother.currentSpan.mIndex * mSizePerSpan + mSecondaryOrientation.getStartAfterPadding();
+                    brother.otherEnd = brother.otherStart + mSecondaryOrientation.getDecoratedMeasurement(brother.view);
+                }
             }
 
             if (mOrientation == VERTICAL) {
                 layoutDecoratedWithMargins(view, otherStart, start, otherEnd, end);
+                if (brothers != null) for (Brother brother : brothers) {
+                    layoutDecoratedWithMargins(brother.view, brother.otherStart, brother.start, brother.otherEnd, brother.end);
+                }
             } else {
                 layoutDecoratedWithMargins(view, start, otherStart, end, otherEnd);
+                if (brothers != null) for (Brother brother : brothers) {
+                    layoutDecoratedWithMargins(brother.view, brother.start, brother.otherStart, brother.end, brother.otherEnd);
+                }
             }
 
             updateAllRemainingSpans(lp, mLayoutState.mLayoutDirection, targetLine);
+            if (brothers != null) for (Brother brother : brothers) {
+                updateAllRemainingSpans(brother.lp, mLayoutState.mLayoutDirection, targetLine);
+            }
 
             recycle(recycler, mLayoutState);
             if (mLayoutState.mStopInFocusable && view.hasFocusable()) {
                 clearRemainingSpans(lp);
             }
             added = true;
-            preView = view;
+            preView = brothers == null ? view : brothers.get(brothers.size() - 1).view;
         }
         if (!added) {
             recycle(recycler, mLayoutState);
@@ -1797,22 +1896,62 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         }
     }
 
-    private LazySpanLookup.AlignSpanItem createAlignSpanItemFromEnd(int newItemTop) {
-        LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
-        fsi.mGapPerSpan = new int[mSpanCount];
-        for (int i = 0; i < mSpanCount; i++) {
-            fsi.mGapPerSpan[i] = newItemTop - mSpans[i].getEndLine(newItemTop);
+    @Nullable
+    private LazySpanLookup.AlignSpanItem createAlignSpanItemFromEnd(int newItemTop, LayoutParams lp) {
+        final int spanIndex = lp.getSpanIndex();
+        final int spanSize = lp.getSpanSize();
+        int start = spanIndex;
+        final int end = spanIndex + spanSize;
+        final int[] gapPerSpan = new int[mSpanCount];
+        boolean useful = false;
+        for (; start != end; start++) {
+            final int i = newItemTop - mSpans[start].getEndLine(newItemTop);
+            gapPerSpan[start] = i;
+            if (i != 0) useful = true;
         }
-        return fsi;
+        if (useful) {
+            LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
+            fsi.mGapPerSpan = gapPerSpan;
+            if (DEBUG) {
+                Log.d(TAG2, "LAYOUT_END"
+                        + "\tposition:" + lp.getViewAdapterPosition()
+                        + "\tspanIndex:" + spanIndex
+                        + "\tspanSize:" + spanSize
+                        + "\tmGapPerSpan:" + Arrays.toString(fsi.mGapPerSpan)
+                );
+            }
+            return fsi;
+        }
+        return null;
     }
 
-    private LazySpanLookup.AlignSpanItem createAlignSpanItemFromStart(int newItemBottom) {
-        LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
-        fsi.mGapPerSpan = new int[mSpanCount];
-        for (int i = 0; i < mSpanCount; i++) {
-            fsi.mGapPerSpan[i] = mSpans[i].getStartLine(newItemBottom) - newItemBottom;
+    @Nullable
+    private LazySpanLookup.AlignSpanItem createAlignSpanItemFromStart(int newItemBottom, LayoutParams lp) {
+        final int spanIndex = lp.getSpanIndex();
+        final int spanSize = lp.getSpanSize();
+        int start = spanIndex;
+        final int end = spanIndex + spanSize;
+        final int[] gapPerSpan = new int[mSpanCount];
+        boolean useful = false;
+        for (; start != end; start++) {
+            final int i = mSpans[start].getStartLine(newItemBottom) - newItemBottom;
+            gapPerSpan[start] = i;
+            if (i != 0) useful = true;
         }
-        return fsi;
+        if (useful) {
+            LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
+            fsi.mGapPerSpan = gapPerSpan;
+            if (DEBUG) {
+                Log.d(TAG2, "LAYOUT_START"
+                        + "\tposition:" + lp.getViewAdapterPosition()
+                        + "\tspanIndex:" + spanIndex
+                        + "\tspanSize:" + spanSize
+                        + "\tmGapPerSpan:" + Arrays.toString(fsi.mGapPerSpan)
+                );
+            }
+            return fsi;
+        }
+        return null;
     }
 
     private void attachViewToSpans(View view, LayoutParams lp, LayoutState layoutState) {
@@ -1919,6 +2058,22 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return minStart;
     }
 
+    private int getMinStart(int def, LayoutParams lp) {
+        final int spanIndex = lp.getSpanIndex();
+        final int spanSize = lp.getSpanSize();
+        int start = spanIndex + 1;
+        final int end = spanIndex + spanSize;
+        int minStart = mSpans[spanIndex].getStartLine(def);
+
+        for (; start < end; start++) {
+            final int spanStart = mSpans[start].getStartLine(def);
+            if (spanStart < minStart) {
+                minStart = spanStart;
+            }
+        }
+        return minStart;
+    }
+
     boolean areAllEndsEqual() {
         int end = mSpans[0].getEndLine(Span.INVALID_LINE);
         for (int i = 1; i < mSpanCount; i++) {
@@ -1939,136 +2094,41 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return true;
     }
 
-    private int getAlignEndLine(int def, LayoutState layoutState, View view, @Nullable View preView) {
+    private int getAlignEndLine(int def, LayoutState layoutState, View view, @Nullable View preView, @Nullable List<Brother> brothers) {
         final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
-        final int spanSize = lp.getSpanSize();
         if (lp.isFullSpan()) {
             return getMaxEnd(def);
         }
-        final LayoutParams preLp;
-        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
+        if (lp.isAlignHalfSpan()) { // 当前是水平网络
+            final int maxEnd = getMaxEnd(def);
+            if (brothers != null) for (Brother brother : brothers) {
+                brother.start = maxEnd;
+            }
+            return maxEnd;
+        } else { // 当前是瀑布流
+            final LayoutParams preLp;
+            if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isAlignSpan()) {
+                return getMaxEnd(def); // 上一个水平
+            }
+            // 上一个也是瀑布流
+            if (checkPreRowIfAlignGrid(layoutState)) {
+                final int prePosition = preLp.getViewLayoutPosition();
+                final int preSpanSize = preLp.getSpanSize();
+                final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
+                final int spanSize = lp.getSpanSize();
+                final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+                final boolean sameLine;
+                if (preferLastSpan) {
+                    sameLine = (preSpanIndex - spanSize) >= 0;
+                } else {
+                    sameLine = (preSpanIndex + preSpanSize) + spanSize <= mSpanCount;
+                }
+                if (sameLine) {
+                    return mPrimaryOrientation.getDecoratedStart(preView); // 瀑布流留在当前行, 是`getMaxEnd`(top)
+                }
+            }
             return lp.mSpan.getEndLine(def);
         }
-        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int prePosition = preLp.getViewLayoutPosition();
-        final int preSpanSize = preLp.getSpanSize();
-        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
-        if (lp.isAlignHalfSpan()) { // 当前是水平网络
-            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
-                final int index;
-                final boolean sameLine;
-                if (preferLastSpan) {
-                    index = preSpanIndex - spanSize;
-                    sameLine = index > -1;
-                } else {
-                    index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize <= mSpanCount;
-                }
-                if (sameLine) {
-                    return mPrimaryOrientation.getDecoratedStart(preView); // 同行同高即水平(top)
-                } else {
-                    return getMaxEnd(def);
-                }
-            } else { // 上一个是瀑布流
-                return getMaxEnd(def);
-            }
-        } else { // 当前是瀑布流
-            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
-                return getMaxEnd(def);
-            } else { // 上一个也是瀑布流
-                if (checkPreRowIfAlignGrid(layoutState)) {
-                    final boolean sameLine;
-                    if (preferLastSpan) {
-                        sameLine = (preSpanIndex - spanSize) > -1;
-                    } else {
-                        sameLine = (preSpanIndex + preSpanSize) + spanSize <= mSpanCount;
-                    }
-                    if (sameLine) {
-                        return mPrimaryOrientation.getDecoratedStart(preView); // 瀑布流留在当前行, 是`getMaxEnd`(top)
-                    } else {
-                        return lp.mSpan.getEndLine(def);
-                    }
-                }
-                return lp.mSpan.getEndLine(def);
-            }
-        }
-    }
-
-    private int getMaxEnd(int def) {
-        int maxEnd = mSpans[0].getEndLine(def);
-        for (int i = 1; i < mSpanCount; i++) {
-            final int spanEnd = mSpans[i].getEndLine(def);
-            if (spanEnd > maxEnd) {
-                maxEnd = spanEnd;
-            }
-        }
-        return maxEnd;
-    }
-
-    private int getAlignStartLine(int def, LayoutState layoutState, View view, @Nullable View preView) {
-        final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
-        final int spanSize = lp.getSpanSize();
-        if (lp.isFullSpan()) {
-            return getMinStart(def);
-        }
-        final LayoutParams preLp;
-        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
-            return lp.mSpan.getStartLine(def);
-        }
-        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int prePosition = preLp.getViewLayoutPosition();
-        final int preSpanSize = preLp.getSpanSize();
-        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
-        if (lp.isAlignHalfSpan()) { // 当前是水平网络
-            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
-                final int index;
-                final boolean sameLine;
-                if (preferLastSpan) {
-                    index = preSpanIndex - spanSize;
-                    sameLine = index > -1;
-                } else {
-                    index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize <= mSpanCount;
-                }
-                if (sameLine) {
-                    return mPrimaryOrientation.getDecoratedEnd(preView); // 同行同高即水平(bottom)
-                } else {
-                    return getMinStart(def);
-                }
-            } else { // 上一个是瀑布流
-                return getMinStart(def);
-            }
-        } else { // 当前是瀑布流
-            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
-                return getMinStart(def);
-            } else {// 上一个也是瀑布流
-                if (checkPreRowIfAlignGrid(layoutState)) { // mViews.add(0, view);
-                    final boolean sameLine;
-                    if (preferLastSpan) {
-                        sameLine = (preSpanIndex - spanSize) > -1;
-                    } else {
-                        sameLine = (preSpanIndex + preSpanSize) + spanSize <= mSpanCount;
-                    }
-                    if (sameLine) {
-                        return mPrimaryOrientation.getDecoratedEnd(preView); // 瀑布流留在当前行,(bottom)
-                    } else {
-                        return lp.mSpan.getStartLine(def);
-                    }
-                }
-                return lp.mSpan.getStartLine(def);
-            }
-        }
-    }
-
-    private int getMinEnd(int def) {
-        int minEnd = mSpans[0].getEndLine(def);
-        for (int i = 1; i < mSpanCount; i++) {
-            final int spanEnd = mSpans[i].getEndLine(def);
-            if (spanEnd < minEnd) {
-                minEnd = spanEnd;
-            }
-        }
-        return minEnd;
     }
 
     /**
@@ -2084,6 +2144,79 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         final View view = mViews.get(preRowIndex);
         final LayoutParams layoutParams = (LayoutParams) view.getLayoutParams();
         return layoutParams.isAlignHalfSpan();
+    }
+
+    private int getMaxEnd(int def) {
+        int maxEnd = mSpans[0].getEndLine(def);
+        for (int i = 1; i < mSpanCount; i++) {
+            final int spanEnd = mSpans[i].getEndLine(def);
+            if (spanEnd > maxEnd) {
+                maxEnd = spanEnd;
+            }
+        }
+        return maxEnd;
+    }
+
+    private boolean checkStartIfStaggered(LayoutParams lp) {
+        final int spanIndex = lp.getSpanIndex();
+        final int spanSize = lp.getSpanSize();
+        int start = spanIndex;
+        final int end = spanIndex + spanSize;
+        for (; start != end; start++) {
+            final ArrayList<View> views = mSpans[start].mViews;
+            if (views.size() > 0) {
+                final LayoutParams layoutParams = (LayoutParams) views.get(0).getLayoutParams();
+                if (layoutParams.isStaggeredSpan()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean checkStartIfStaggered(@Nullable List<Brother> brothers) {
+        if (brothers != null) for (Brother brother : brothers) {
+            if (checkStartIfStaggered(brother.lp)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int getAlignStartLine(int def, LayoutState layoutState, View view, @Nullable View preView, @Nullable List<Brother> brothers) {
+        final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
+        if (lp.isFullSpan()) {
+            return getMinStart(def);
+        }
+        if (lp.isAlignHalfSpan()) { // 当前是水平网络
+            final int minStart;
+            if (checkStartIfStaggered(lp) || checkStartIfStaggered(brothers)) {
+                minStart = getMinStart(def);
+            } else {
+                if (preView == null || ((LayoutParams) preView.getLayoutParams()).isAlignSpan()) {
+                    minStart = mPrimaryOrientation.getDecoratedStart(preView);
+                } else {
+                    minStart = getMinStart(def, lp);
+                }
+            }
+            if (brothers != null) for (Brother brother : brothers) {
+                brother.end = minStart;
+            }
+            return minStart;
+        } else { // 当前是瀑布流
+            return getMinStart(def, lp);
+        }
+    }
+
+    private int getMinEnd(int def) {
+        int minEnd = mSpans[0].getEndLine(def);
+        for (int i = 1; i < mSpanCount; i++) {
+            final int spanEnd = mSpans[i].getEndLine(def);
+            if (spanEnd < minEnd) {
+                minEnd = spanEnd;
+            }
+        }
+        return minEnd;
     }
 
     private void recycleFromStart(RecyclerView.Recycler recycler, int line) {
@@ -2157,9 +2290,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 for (int i = count - 1; i >= 0; i--) {
                     final View childAt = getChildAt(i);
                     final LayoutParams clp = (LayoutParams) childAt.getLayoutParams();
-                    if (DEBUG) {
-                        Log.v(TAG2, "findPreviousView:" + count + "\t" + i + " prePosition:" + prePosition + "\t" + childAt);
-                    }
                     if (clp.getViewLayoutPosition() == prePosition) {
                         return childAt;
                     }
@@ -2168,9 +2298,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 for (int i = 0; i < count; i++) {
                     final View childAt = getChildAt(i);
                     final LayoutParams clp = (LayoutParams) childAt.getLayoutParams();
-                    if (DEBUG) {
-                        Log.v(TAG2, "findPreviousView:" + count + "\t" + i + " prePosition:" + prePosition + "\t" + childAt);
-                    }
                     if (clp.getViewLayoutPosition() == prePosition) {
                         return childAt;
                     }
@@ -2180,53 +2307,65 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         return null;
     }
 
+    private void checkNextSpans(LayoutState layoutState, int preIndex, int preSize, @Nullable List<Brother> brothers) {
+        if (brothers == null) return;
+        final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
+        for (Brother brother : brothers) {
+            final int index;
+            final int size = brother.lp.getSpanSize();
+            if (preferLastSpan) {
+                index = preIndex - size; // note: spans index 始终从左到右
+            } else {
+                index = preIndex + preSize;
+            }
+            brother.currentSpan = mSpans[index];
+            mLazySpanLookup.setSpan(brother.position, brother.currentSpan);
+            preIndex = index;
+            preSize = size;
+        }
+    }
+
     /**
      * 解决 mIndex 的问题
      */
-    private Span getNextSpan(LayoutState layoutState, View view, @Nullable View preView) {
+    private Span getNextSpan(LayoutState layoutState, View view, @Nullable View preView, @Nullable List<Brother> brothers) {
         final LayoutParams lp = ((LayoutParams) view.getLayoutParams());
-        final int spanSize = lp.getSpanSize();
         if (lp.isFullSpan()) {
             return mSpans[0];
         }
+        final int spanSize = lp.getSpanSize();
         final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
         final int first = preferLastSpan ? mSpanCount - spanSize : 0;
-        final LayoutParams preLp;
-        if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isFullSpan()) {
-            return mSpans[first];
-        }
-        final int prePosition = preLp.getViewLayoutPosition();
-        final int preSpanSize = preLp.getSpanSize();
-        final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
         if (lp.isAlignHalfSpan()) { // 当前是水平网络
-            if (preLp.isAlignHalfSpan()) { // 上一个也是水平网络
+            int preIndex = first;
+            int preSize = spanSize;
+            if (brothers != null) for (Brother brother : brothers) {
                 final int index;
-                final boolean sameLine;
+                final int size = brother.lp.getSpanSize();
                 if (preferLastSpan) {
-                    index = preSpanIndex - spanSize; // note: spans index 始终从左到右
-                    sameLine = index > -1;
+                    index = preIndex - size; // note: spans index 始终从左到右
                 } else {
-                    index = preSpanIndex + preSpanSize;
-                    sameLine = index + spanSize <= mSpanCount;
+                    index = preIndex + preSize;
                 }
-                if (sameLine) {
-                    return mSpans[index];
-                } else {
-                    return mSpans[first];
-                }
-            } else { // 上一个是瀑布流
-                return mSpans[first];
+                brother.currentSpan = mSpans[index];
+                preIndex = index;
+                preSize = size;
             }
+            return mSpans[first];
         } else { // 当前是瀑布流
-            if (preLp.isAlignHalfSpan()) { // 上一个是水平网络
+            final LayoutParams preLp;
+            if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isAlignSpan()) { // 上一个是水平网络
                 return mSpans[first];
             } else { // 上一个也是瀑布流
+                final int prePosition = preLp.getViewLayoutPosition();
+                final int preSpanSize = preLp.getSpanSize();
+                final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
                 if (checkPreRowIfAlignGrid(layoutState)) {
                     final int index; // note 当前 index >=1, 前一行是水平网格, 重新分配按水平
                     final boolean sameLine;
                     if (preferLastSpan) {
                         index = preSpanIndex - spanSize;
-                        sameLine = index > -1;
+                        sameLine = index >= 0;
                     } else {
                         index = preSpanIndex + preSpanSize;
                         sameLine = index + spanSize <= mSpanCount;
@@ -2712,7 +2851,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         public static final int INVALID_SPAN_ID = -1;
 
         // Package scope to be able to access from tests.
-        Span mSpan;
+        private Span mSpan;
 
         /**
          * NOTE 水平对齐半跨度
@@ -2723,6 +2862,8 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
          */
         private int mSpanSize = 0;
         private final Supplier<Integer> mSpanCountSupplier;
+
+        private boolean mHasGap = false;
 
         public LayoutParams(Context c, AttributeSet attrs, Supplier<Integer> spanCountSupplier) {
             super(c, attrs);
@@ -2748,6 +2889,18 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             super(source);
             mSpanCountSupplier = spanCountSupplier;
         }
+
+//        public void markGap() {
+//            mHasGap = true;
+//        }
+//
+//        public void resetGap() {
+//            mHasGap = false;
+//        }
+//
+//        public boolean isHasGap() {
+//            return mHasGap;
+//        }
 
         public boolean isFullSpan() {
             return mSpanSize == mSpanCountSupplier.get();
@@ -3131,7 +3284,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
 
         private static final int MIN_SIZE = 10;
         int[] mData;
-        List<AlignSpanItem> mAlignSpanItems;
+        List<AlignSpanItem> mAlignSpanItems; // todo use map
 
 
         /**
@@ -3592,6 +3745,29 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             } else {
                 mOffset = mPrimaryOrientation.getStartAfterPadding() + addedDistance;
             }
+        }
+    }
+
+    private static class Brother {
+        int start;
+        int end;
+        int otherStart;
+        int otherEnd;
+
+        Span currentSpan;
+
+        static Brother get(View view, LayoutParams lp, int position) {
+            return new Brother(view, lp, position);
+        }
+
+        final View view;
+        final LayoutParams lp;
+        final int position;
+
+        Brother(View view, LayoutParams lp, int position) {
+            this.view = view;
+            this.lp = lp;
+            this.position = position;
         }
     }
 
