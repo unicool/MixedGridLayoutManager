@@ -2087,12 +2087,14 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             }
             return maxEnd;
         } else { // 当前是瀑布流
-            final LayoutParams preLp;
-            if (preView == null || (preLp = ((LayoutParams) preView.getLayoutParams())).isAlignSpan()) {
+            if (preView == null) {
+                return lp.mSpan.getEndLine(def);
+            }
+            final LayoutParams preLp = (LayoutParams) preView.getLayoutParams();
+            if (preLp.isAlignSpan()) {
                 return getMaxEnd(def); // 上一个水平
             }
-            // 上一个也是瀑布流
-            if (checkPreRowIfAlignGrid(layoutState)) {
+            if (checkPreRowIfAlignGrid(layoutState)) { // 上一个也是瀑布流
                 final int prePosition = preLp.getViewLayoutPosition();
                 final int preSpanSize = preLp.getSpanSize();
                 final int preSpanIndex = mLazySpanLookup.getSpan(prePosition);
@@ -2353,8 +2355,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     }
                     if (sameLine) {
                         return mSpans[index];
-                    } else {
-                        return getNextSpan(layoutState, lp);
                     }
                 }
                 return getNextSpan(layoutState, lp);
