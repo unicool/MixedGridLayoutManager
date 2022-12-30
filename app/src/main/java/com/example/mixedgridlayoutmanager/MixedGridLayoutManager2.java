@@ -55,13 +55,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
     public static final int GAP_HANDLING_NONE = 0;
 
     /**
-     * @deprecated No longer supported.
-     */
-    @SuppressWarnings("unused")
-    @Deprecated
-    public static final int GAP_HANDLING_LAZY = 1;
-
-    /**
      * When scroll state is changed to {@link RecyclerView#SCROLL_STATE_IDLE}, StaggeredGrid will
      * check if there are gaps in the because of full span items. If it finds, it will re-layout
      * and move items to correct positions with animations.
@@ -362,7 +355,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 }
                 mSpansToCheck.clear(lp.mSpan.mIndex);
             }
-            if (lp.getSpanSize() > 1) {
+            if (lp.isAlignSpan()) {
                 continue; // quick reject
             }
 
@@ -445,6 +438,10 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      */
     public void setSpanSizeLookup(SpanSizeLookup spanSizeLookup) {
         this.mSpanSizeLookup = spanSizeLookup;
+    }
+
+    public SpanSizeLookup getSpanSizeLookup() {
+        return mSpanSizeLookup;
     }
 
     /**
@@ -1824,10 +1821,10 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             final int otherStart;
             final int otherEnd;
             if (isLayoutRTL() && mOrientation == VERTICAL) {
-                otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - 1 - currentSpan.mIndex) * mSizePerSpan;
+                otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - lp.getSpanSize() - currentSpan.mIndex) * mSizePerSpan;
                 otherStart = otherEnd - mSecondaryOrientation.getDecoratedMeasurement(view);
                 if (brothers != null) for (Brother brother : brothers) {
-                    brother.otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - 1 - brother.currentSpan.mIndex) * mSizePerSpan;
+                    brother.otherEnd = mSecondaryOrientation.getEndAfterPadding() - (mSpanCount - brother.lp.getSpanSize() - brother.currentSpan.mIndex) * mSizePerSpan;
                     brother.otherStart = brother.otherEnd - mSecondaryOrientation.getDecoratedMeasurement(brother.view);
                 }
             } else {
@@ -1912,14 +1909,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (useful) {
             LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
             fsi.mGapPerSpan = gapPerSpan;
-            if (DEBUG) {
-                Log.d(TAG2, "LAYOUT_END"
-                        + "\tposition:" + lp.getViewAdapterPosition()
-                        + "\tspanIndex:" + spanIndex
-                        + "\tspanSize:" + spanSize
-                        + "\tmGapPerSpan:" + Arrays.toString(fsi.mGapPerSpan)
-                );
-            }
             return fsi;
         }
         return null;
@@ -1941,14 +1930,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         if (useful) {
             LazySpanLookup.AlignSpanItem fsi = new LazySpanLookup.AlignSpanItem();
             fsi.mGapPerSpan = gapPerSpan;
-            if (DEBUG) {
-                Log.d(TAG2, "LAYOUT_START"
-                        + "\tposition:" + lp.getViewAdapterPosition()
-                        + "\tspanIndex:" + spanIndex
-                        + "\tspanSize:" + spanSize
-                        + "\tmGapPerSpan:" + Arrays.toString(fsi.mGapPerSpan)
-                );
-            }
             return fsi;
         }
         return null;
@@ -2385,23 +2366,16 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      * Finds the span for the next view.
      */
     private Span getNextSpan(LayoutState layoutState, LayoutParams lp) {
-        final int spanSize = lp.getSpanSize();
         final boolean preferLastSpan = preferLastSpan(layoutState.mLayoutDirection);
-        final int startIndex, endIndex, step;
-        if (preferLastSpan) {
-            startIndex = mSpanCount - spanSize;
-            endIndex = -1;
-            step = -spanSize;
-        } else {
-            startIndex = 0;
-            endIndex = mSpanCount;
-            step = spanSize;
-        }
+        final int spanSize = lp.getSpanSize();
+        final int step = preferLastSpan ? -spanSize : spanSize;
+        int i = preferLastSpan ? mSpanCount - spanSize : 0;
+        int times = mSpanCount / spanSize;
         if (layoutState.mLayoutDirection == LayoutState.LAYOUT_END) {
             Span min = null;
             int minLine = Integer.MAX_VALUE;
             final int defaultLine = mPrimaryOrientation.getStartAfterPadding();
-            for (int i = startIndex; i < endIndex; i += step) {
+            for (; times != 0; i += step, times--) {
                 final Span other = mSpans[i];
                 int otherLine = other.getEndLine(defaultLine);
                 if (otherLine < minLine) {
@@ -2414,7 +2388,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             Span max = null;
             int maxLine = Integer.MIN_VALUE;
             final int defaultLine = mPrimaryOrientation.getEndAfterPadding();
-            for (int i = startIndex; i > endIndex; i += step) {
+            for (; times != 0; i += step, times--) {
                 final Span other = mSpans[i];
                 int otherLine = other.getStartLine(defaultLine);
                 if (otherLine > maxLine) {

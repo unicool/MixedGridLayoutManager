@@ -19,20 +19,21 @@ class MainActivity : AppCompatActivity() {
         gggo(list)
     }
 
-    private val viewTypeOfFullSpan = 6
+    private val spanCount = 6
+    private val viewTypeOfFullSpan = spanCount
     private val viewTypeOfStaggered = 0
-    private val viewTypeOfGrid = 1
+    private val viewTypeOfGrid = spanCount / 3
     private fun gggo(list: RecyclerView) {
         list.layoutManager = MixedGridLayoutManager2(
-            6, RecyclerView.VERTICAL
+            spanCount, RecyclerView.VERTICAL
         ).apply {
-            this.setSpanSizeLookup(object : MixedGridLayoutManager2.SpanSizeLookup{
+            this.setSpanSizeLookup(object : MixedGridLayoutManager2.SpanSizeLookup {
                 override fun isStaggeredStyle(position: Int): Boolean {
                     return x(position) == viewTypeOfStaggered
                 }
 
                 override fun getStaggeredSpanSize(): Int {
-                    return 2
+                    return spanCount / 2
                 }
 
                 override fun getGridSpanSize(position: Int): Int {
@@ -40,6 +41,9 @@ class MainActivity : AppCompatActivity() {
                 }
             })
         }
+
+//        list.layoutManager = StaggeredGridLayoutManager(2, RecyclerView.VERTICAL)
+
         list.adapter = object : RecyclerView.Adapter<ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
                 val density = parent.context.resources.displayMetrics.density.toInt()
@@ -55,7 +59,6 @@ class MainActivity : AppCompatActivity() {
                             }
                 }.apply {
                     addView(TextView(parent.context).apply {
-
                         id = android.R.id.text1
                     })
                 }) {}
@@ -63,26 +66,15 @@ class MainActivity : AppCompatActivity() {
 
             override fun onBindViewHolder(holder: ViewHolder, position: Int) {
                 holder.itemView.findViewById<TextView>(android.R.id.text1).apply {
-                    text = "${position}\r\n${holder.itemView.layoutParams}"
+                    text = "${position}\t\r\n${getItemViewType(position)}\r\n${holder.itemView}"
 
                     val density = context.resources.displayMetrics.density.toInt()
                     val i10 = density * 10
-                    val iR = density * Random.nextInt(127)
+                    val iR = density * Random.nextInt(255)
                     setPaddingRelative(i10, i10, i10, iR)
-//                    println("TAGMXIED:\t${position}\t${iR}")
-
-                    if (holder.itemViewType == viewTypeOfFullSpan) {
-                        (holder.itemView.layoutParams as MixedGridLayoutManager2.LayoutParams).apply {
-//                            spanSize = 2
-                        }
-                        setBackgroundColor(0xFFFF0000.toInt())
-                    } else {
-                        setBackgroundColor(Random.nextLong(0xFFFFFFFF).toInt())
-                    }
+                    setBackgroundColor(Random.nextLong(0xffFFFF00).toInt())
                 }
-                (holder.itemView as FrameLayout).apply {
-
-                }
+                (holder.itemView as FrameLayout).apply {}
             }
 
             override fun getItemViewType(position: Int): Int {
@@ -90,7 +82,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun getItemCount(): Int {
-                return 50
+                return 52
             }
 
             override fun getItemId(position: Int): Long {
@@ -103,33 +95,53 @@ class MainActivity : AppCompatActivity() {
     private fun x(
         position: Int
     ) = when (position) {
-        0 -> {
-            viewTypeOfStaggered
-        }
-        1 -> {
-            viewTypeOfFullSpan
-        }
-        2, 3 -> {
-            viewTypeOfStaggered
-        }
-        4 -> {
-            viewTypeOfFullSpan
-        }
-        5, 6, 7 -> {
-            viewTypeOfStaggered
-        }
-        8 -> {
-            viewTypeOfFullSpan
-        }
+        0 -> viewTypeOfStaggered
+        1 -> viewTypeOfStaggered
+        2 -> viewTypeOfStaggered
+        3 -> viewTypeOfStaggered
+        4 -> viewTypeOfStaggered
+        5 -> viewTypeOfStaggered
+        6 -> viewTypeOfStaggered
+        7 -> viewTypeOfStaggered
+        8 -> viewTypeOfStaggered
 
-        in 9..20 -> {
-            viewTypeOfStaggered
-        }
-        21 -> {
-            viewTypeOfFullSpan
-        }
-        else -> {
-            viewTypeOfGrid
-        }
+        9 -> viewTypeOfFullSpan
+
+        10 -> viewTypeOfGrid
+        11 -> viewTypeOfGrid
+        12 -> viewTypeOfGrid
+        13 -> viewTypeOfGrid
+        14 -> viewTypeOfGrid
+        15 -> viewTypeOfGrid
+        16 -> viewTypeOfGrid
+        17 -> viewTypeOfGrid
+        18 -> viewTypeOfGrid
+        19 -> viewTypeOfGrid
+        20 -> viewTypeOfGrid
+
+
+        21 -> viewTypeOfStaggered
+        22 -> viewTypeOfGrid
+        23 -> viewTypeOfStaggered
+        24 -> viewTypeOfStaggered
+        25 -> viewTypeOfGrid
+        26 -> viewTypeOfGrid
+        27 -> viewTypeOfStaggered
+        28 -> viewTypeOfStaggered
+        29 -> viewTypeOfStaggered
+        30 -> viewTypeOfGrid
+        31 -> viewTypeOfGrid
+        32 -> viewTypeOfGrid
+
+        33 -> viewTypeOfStaggered
+
+        34 -> viewTypeOfFullSpan
+        35 -> viewTypeOfGrid
+        36 -> viewTypeOfFullSpan
+        37 -> viewTypeOfGrid
+        38 -> viewTypeOfGrid
+        39 -> viewTypeOfFullSpan
+
+        else -> viewTypeOfGrid
     }
 }
