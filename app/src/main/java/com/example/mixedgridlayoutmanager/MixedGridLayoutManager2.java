@@ -1656,7 +1656,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                 view = layoutState.next(recycler);
                 lp = ((LayoutParams) view.getLayoutParams());
                 position = lp.getViewLayoutPosition();
-                lp.mSpanSize = getSpanSize(position);
+                setupSpanSize(view, lp, position);
             } else {
                 break;
             }
@@ -1677,9 +1677,8 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
                     View v = layoutState.next(recycler);
                     LayoutParams l = ((LayoutParams) v.getLayoutParams());
                     int p = l.getViewLayoutPosition();
-                    int spanSize = getSpanSize(p);
-                    l.mSpanSize = spanSize;
-                    remainSize -= spanSize;
+                    setupSpanSize(v, l, p);
+                    remainSize -= l.getSpanSize();
                     if (l.isAlignHalfSpan() && remainSize >= 0) {
                         if (brothers == null) brothers = new ArrayList<>(mSpanCount);
                         brothers.add(Brother.get(v, l, p));
@@ -1871,6 +1870,18 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             diff = maxEnd - mPrimaryOrientation.getEndAfterPadding();
         }
         return diff > 0 ? Math.min(layoutState.mAvailable, diff) : 0;
+    }
+
+    private void setupSpanSize(View view, LayoutParams lp, int position) {
+        final int key = 0xFF << 22;
+        final Object tag = view.getTag(key);
+        if (tag instanceof Integer) {
+            lp.mSpanSize = (int) tag;
+        } else {
+            final int spanSize = getSpanSize(position);
+            lp.mSpanSize = spanSize;
+            view.setTag(key, spanSize);
+        }
     }
 
     private int getSpanSize(int position) {
@@ -2862,18 +2873,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
             super(source);
             mSpanCountSupplier = spanCountSupplier;
         }
-
-//        public void markGap() {
-//            mHasGap = true;
-//        }
-//
-//        public void resetGap() {
-//            mHasGap = false;
-//        }
-//
-//        public boolean isHasGap() {
-//            return mHasGap;
-//        }
 
         public boolean isFullSpan() {
             return mSpanSize == mSpanCountSupplier.get();
