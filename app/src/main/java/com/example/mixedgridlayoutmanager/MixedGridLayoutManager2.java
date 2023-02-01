@@ -432,9 +432,6 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
         }
     }
 
-    /**
-     * 当返回`0`时, 表示是瀑布流
-     */
     public void setSpanSizeLookup(SpanSizeLookup spanSizeLookup) {
         this.mSpanSizeLookup = spanSizeLookup;
     }
