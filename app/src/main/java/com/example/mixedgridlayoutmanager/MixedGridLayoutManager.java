@@ -37,7 +37,7 @@ import java.util.List;
  * StaggeredGridLayoutManager can offset spans independently or move items between spans. You can
  * control this behavior via {@link #setGapStrategy(int)}.
  */
-public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implements
+public class MixedGridLayoutManager extends RecyclerView.LayoutManager implements
         RecyclerView.SmoothScroller.ScrollVectorProvider {
 
     private static final String TAG = "FINNN";
@@ -218,8 +218,8 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      * "layoutManager". Defaults to single column and vertical.
      */
     @SuppressWarnings("unused")
-    public MixedGridLayoutManager2(Context context, AttributeSet attrs, int defStyleAttr,
-                                   int defStyleRes) {
+    public MixedGridLayoutManager(Context context, AttributeSet attrs, int defStyleAttr,
+                                  int defStyleRes) {
         Properties properties = getProperties(context, attrs, defStyleAttr, defStyleRes);
         setOrientation(properties.orientation);
         setSpanCount(properties.spanCount);
@@ -235,7 +235,7 @@ public class MixedGridLayoutManager2 extends RecyclerView.LayoutManager implemen
      *                    orientation is horizontal, spanCount is number of rows.
      * @param orientation {@link #VERTICAL} or {@link #HORIZONTAL}
      */
-    public MixedGridLayoutManager2(int spanCount, int orientation) {
+    public MixedGridLayoutManager(int spanCount, int orientation) {
         mOrientation = orientation;
         setSpanCount(spanCount);
         mLayoutState = new LayoutState();

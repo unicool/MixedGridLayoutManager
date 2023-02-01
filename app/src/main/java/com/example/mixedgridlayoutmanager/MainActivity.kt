@@ -24,10 +24,10 @@ class MainActivity : AppCompatActivity() {
     private val viewTypeOfStaggered = 0
     private val viewTypeOfGrid = spanCount / 3
     private fun gggo(list: RecyclerView) {
-        list.layoutManager = MixedGridLayoutManager2(
+        list.layoutManager = MixedGridLayoutManager(
             spanCount, RecyclerView.VERTICAL
         ).apply {
-            this.setSpanSizeLookup(object : MixedGridLayoutManager2.SpanSizeLookup {
+            this.setSpanSizeLookup(object : MixedGridLayoutManager.SpanSizeLookup {
                 override fun isStaggeredStyle(position: Int): Boolean {
                     return x(position) == viewTypeOfStaggered
                 }
@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
                 val i10 = density * 10
                 return object : ViewHolder(FrameLayout(parent.context).apply {
                     layoutParams =
-                        (list.layoutManager as MixedGridLayoutManager2).generateDefaultLayoutParams()
+                        (list.layoutManager as MixedGridLayoutManager).generateDefaultLayoutParams()
                             .apply {
                                 marginStart = i10
                                 marginEnd = i10
