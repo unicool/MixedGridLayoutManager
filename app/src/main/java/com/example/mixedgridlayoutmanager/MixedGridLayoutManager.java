@@ -2527,14 +2527,24 @@ public class MixedGridLayoutManager extends RecyclerView.LayoutManager implement
         }
 
         int itemPrefetchCount = 0;
-        for (int i = 0; i < mSpanCount; i++) {
+        for (int i = 0, spanMaxDistance, spanNextIndex, position = mLayoutState.mCurrentPosition;
+             i < mSpanCount;
+             position += mLayoutState.mItemDirection
+        ) {
             // compute number of pixels past the edge of the viewport that the current span extends
-            int distance = mLayoutState.mItemDirection == LayoutState.LAYOUT_START
-                    ? mLayoutState.mStartLine - mSpans[i].getStartLine(mLayoutState.mStartLine)
-                    : mSpans[i].getEndLine(mLayoutState.mEndLine) - mLayoutState.mEndLine;
-            if (distance >= 0) {
+            spanMaxDistance = Integer.MIN_VALUE;
+            spanNextIndex = i + Math.abs(getSpanSize(position));
+            do {
+                int distance = mLayoutState.mItemDirection == LayoutState.LAYOUT_START
+                        ? mLayoutState.mStartLine - mSpans[i].getStartLine(mLayoutState.mStartLine)
+                        : mSpans[i].getEndLine(mLayoutState.mEndLine) - mLayoutState.mEndLine;
+                spanMaxDistance = Math.max(spanMaxDistance, distance);
+                i++;
+            } while (i < mSpanCount && i < spanNextIndex);
+
+            if (spanMaxDistance >= 0) {
                 // span extends to the edge, so prefetch next item
-                mPrefetchDistances[itemPrefetchCount] = distance;
+                mPrefetchDistances[itemPrefetchCount] = spanMaxDistance;
                 itemPrefetchCount++;
             }
         }
